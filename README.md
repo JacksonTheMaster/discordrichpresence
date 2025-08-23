@@ -48,10 +48,11 @@ import (
 	discordrichpresence "github.com/jacksonthemaster/discordrichpresence"
 )
 
-func main() {
+// StartDiscordRPC starts the Discord Rich Presence client in a non-blocking manner.
+// It returns the client so the caller can manage its lifecycle (e.g., call Close()).
+func StartDiscordRPC() (*discordrichpresence.Client, error) {
 	// Initialize a new Discord RPC client with your application ID
-	client := discordrichpresence.NewClient("YOUR_APPLICATION_ID")
-	defer client.Close()
+	client := discordrichpresence.NewClient("YOUR_APPLICATION_ID") // Replace with your actualllapplication ID
 
 	// Build an activity using the fluent ActivityBuilder
 	activity := discordrichpresence.NewActivity().
@@ -66,16 +67,11 @@ func main() {
 	// Start the client with the activity, updating every 30 seconds
 	if err := client.StartWithActivity(activity, 30*time.Second); err != nil {
 		log.Fatalf("Failed to start Discord RPC: %v", err)
+		return nil, err
 	}
 
-	log.Println("Discord Rich Presence started successfully!")
-	log.Println("Press Ctrl+C to stop...")
-
-	// Wait for an interrupt signal to gracefully shut down
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-	<-sigChan
-	log.Println("Shutting down Discord RPC...")
+	logger.Core.Debug("Discord Rich Presence started successfully!")
+	return client, nil
 }
 ```
 
