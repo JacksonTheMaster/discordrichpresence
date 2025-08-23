@@ -16,7 +16,7 @@ A Go module for integrating Discord Rich Presence into your applications. This m
 To use this module in your Go project, run:
 
 ```bash
-go get github.com/jacksonthemaster/discordrichpresence@v0.1.0
+go get github.com/jacksonthemaster/discordrichpresence
 ```
 
 Ensure you have Go 1.21 or higher installed. You can check your Go version with:
