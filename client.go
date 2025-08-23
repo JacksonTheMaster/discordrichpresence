@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"runtime"
@@ -13,6 +12,7 @@ import (
 	"time"
 )
 
+// Constants for Discord IPC opcodes
 const (
 	opHandshake = 0
 	opFrame     = 1
@@ -58,11 +58,12 @@ func (c *Client) Connect() error {
 		return fmt.Errorf("handshake failed: %w", err)
 	}
 
-	log.Println("Discord RPC connected successfully")
+	//log.Println("Discord rich presence RPC connected successfully")
 	return nil
 }
 
 // StartWithActivity starts the RPC client with the given activity, updating at the specified interval.
+// It runs in a goroutine and does not block the caller.
 func (c *Client) StartWithActivity(activity Activity, updateInterval time.Duration) error {
 	if err := c.Connect(); err != nil {
 		return err
@@ -73,7 +74,7 @@ func (c *Client) StartWithActivity(activity Activity, updateInterval time.Durati
 		return fmt.Errorf("failed to set initial activity: %w", err)
 	}
 
-	// Start update routine in goroutine
+	// Start update routine in a goroutine
 	go c.updateRoutine(activity, updateInterval)
 
 	return nil
@@ -90,7 +91,7 @@ func (c *Client) updateRoutine(activity Activity, interval time.Duration) {
 			return
 		case <-c.updateTicker.C:
 			if err := c.SetActivity(activity); err != nil {
-				log.Printf("Failed to update activity: %v", err)
+				//log.Printf("Failed to update activity: %v", err)
 			}
 		}
 	}
@@ -108,7 +109,7 @@ func (c *Client) findDiscordSocket() (net.Conn, error) {
 
 		conn, err := net.DialTimeout("unix", address, 2*time.Second)
 		if err == nil {
-			log.Printf("Connected to Discord via %s", address)
+			//log.Printf("Connected to Discord via %s", address)
 			return conn, nil
 		}
 	}
