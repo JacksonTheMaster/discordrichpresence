@@ -1,5 +1,4 @@
 //go:build windows
-// +build windows
 
 package discordrichpresence
 
@@ -80,6 +79,7 @@ func (w *WindowsPipeConn) RemoteAddr() net.Addr {
 	return &net.UnixAddr{Name: "discord-pipe", Net: "pipe"}
 }
 
+// WindowsPipeConn implementation of net.Conn interface
 func (w *WindowsPipeConn) SetDeadline(t time.Time) error {
 	// Named pipes don't support deadlines in the same way
 	return nil
