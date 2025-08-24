@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"runtime"
 	"sync"
 	"time"
 )
@@ -105,32 +104,14 @@ func (c *Client) findDiscordSocket() (net.Conn, error) {
 	}
 
 	for _, pipeName := range pipePaths {
-		address := c.getSocketAddress(pipeName)
-
-		conn, err := net.DialTimeout("unix", address, 2*time.Second)
+		conn, err := c.connectToPipe(pipeName)
 		if err == nil {
-			//log.Printf("Connected to Discord via %s", address)
+			//log.Printf("Connected to Discord via %s", pipeName)
 			return conn, nil
 		}
 	}
 
 	return nil, fmt.Errorf("could not connect to any Discord RPC socket")
-}
-
-// getSocketAddress returns the appropriate socket address for the platform.
-func (c *Client) getSocketAddress(pipeName string) string {
-	if runtime.GOOS == "windows" {
-		return `\\.\pipe\` + pipeName
-	}
-
-	tmpDir := os.Getenv("XDG_RUNTIME_DIR")
-	if tmpDir == "" {
-		tmpDir = os.Getenv("TMPDIR")
-	}
-	if tmpDir == "" {
-		tmpDir = "/tmp"
-	}
-	return fmt.Sprintf("%s/%s", tmpDir, pipeName)
 }
 
 // handshake performs the initial handshake with Discord.
