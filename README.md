@@ -69,8 +69,6 @@ func StartDiscordRPC() (*discordrichpresence.Client, error) {
 		log.Fatalf("Failed to start Discord RPC: %v", err)
 		return nil, err
 	}
-
-	logger.Core.Debug("Discord Rich Presence started successfully!")
 	return client, nil
 }
 ```

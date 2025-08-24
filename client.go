@@ -9,6 +9,7 @@ import (
 	"os"
 	"runtime"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -21,6 +22,14 @@ const (
 	opPong      = 4
 )
 
+// Windows-specific constants for named pipe access
+const (
+	GENERIC_READ          = 0x80000000
+	GENERIC_WRITE         = 0x40000000
+	OPEN_EXISTING         = 3
+	FILE_ATTRIBUTE_NORMAL = 0x80
+)
+
 // Client represents a Discord Rich Presence client.
 type Client struct {
 	conn         net.Conn
@@ -30,6 +39,11 @@ type Client struct {
 	ctx          context.Context
 	cancel       context.CancelFunc
 	updateTicker *time.Ticker
+}
+
+// WindowsPipeConn wraps a Windows named pipe handle to implement net.Conn
+type WindowsPipeConn struct {
+	handle syscall.Handle
 }
 
 // NewClient creates a new Discord RPC client with the specified application ID.
@@ -105,11 +119,9 @@ func (c *Client) findDiscordSocket() (net.Conn, error) {
 	}
 
 	for _, pipeName := range pipePaths {
-		address := c.getSocketAddress(pipeName)
-
-		conn, err := net.DialTimeout("unix", address, 2*time.Second)
+		conn, err := c.connectToPipe(pipeName)
 		if err == nil {
-			//log.Printf("Connected to Discord via %s", address)
+			//log.Printf("Connected to Discord via %s", pipeName)
 			return conn, nil
 		}
 	}
@@ -117,12 +129,46 @@ func (c *Client) findDiscordSocket() (net.Conn, error) {
 	return nil, fmt.Errorf("could not connect to any Discord RPC socket")
 }
 
-// getSocketAddress returns the appropriate socket address for the platform.
-func (c *Client) getSocketAddress(pipeName string) string {
+// connectToPipe connects to the appropriate IPC mechanism based on the platform.
+func (c *Client) connectToPipe(pipeName string) (net.Conn, error) {
 	if runtime.GOOS == "windows" {
-		return `\\.\pipe\` + pipeName
+		return c.connectWindowsNamedPipe(pipeName)
+	} else {
+		// Unix-like systems use Unix domain sockets
+		address := c.getSocketAddress(pipeName)
+		return net.DialTimeout("unix", address, 2*time.Second)
+	}
+}
+
+// connectWindowsNamedPipe connects to a Windows named pipe.
+func (c *Client) connectWindowsNamedPipe(pipeName string) (net.Conn, error) {
+	pipePath := `\\.\pipe\` + pipeName
+
+	// Convert string to UTF-16 for Windows API
+	pipePathPtr, err := syscall.UTF16PtrFromString(pipePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert pipe path: %w", err)
 	}
 
+	// Try to open the named pipe
+	handle, err := syscall.CreateFile(
+		pipePathPtr,
+		GENERIC_READ|GENERIC_WRITE,
+		0,   // dwShareMode
+		nil, // lpSecurityAttributes
+		OPEN_EXISTING,
+		FILE_ATTRIBUTE_NORMAL,
+		0, // hTemplateFile
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open named pipe %s: %w", pipePath, err)
+	}
+
+	return &WindowsPipeConn{handle: handle}, nil
+}
+
+// getSocketAddress returns the appropriate socket address for Unix-like systems.
+func (c *Client) getSocketAddress(pipeName string) string {
 	tmpDir := os.Getenv("XDG_RUNTIME_DIR")
 	if tmpDir == "" {
 		tmpDir = os.Getenv("TMPDIR")
@@ -131,6 +177,44 @@ func (c *Client) getSocketAddress(pipeName string) string {
 		tmpDir = "/tmp"
 	}
 	return fmt.Sprintf("%s/%s", tmpDir, pipeName)
+}
+
+// WindowsPipeConn implementation of net.Conn interface
+func (w *WindowsPipeConn) Read(b []byte) (n int, err error) {
+	var bytesRead uint32
+	err = syscall.ReadFile(w.handle, b, &bytesRead, nil)
+	return int(bytesRead), err
+}
+
+func (w *WindowsPipeConn) Write(b []byte) (n int, err error) {
+	var bytesWritten uint32
+	err = syscall.WriteFile(w.handle, b, &bytesWritten, nil)
+	return int(bytesWritten), err
+}
+
+func (w *WindowsPipeConn) Close() error {
+	return syscall.CloseHandle(w.handle)
+}
+
+func (w *WindowsPipeConn) LocalAddr() net.Addr {
+	return &net.UnixAddr{Name: "discord-pipe", Net: "pipe"}
+}
+
+func (w *WindowsPipeConn) RemoteAddr() net.Addr {
+	return &net.UnixAddr{Name: "discord-pipe", Net: "pipe"}
+}
+
+func (w *WindowsPipeConn) SetDeadline(t time.Time) error {
+	// Named pipes don't support deadlines in the same way
+	return nil
+}
+
+func (w *WindowsPipeConn) SetReadDeadline(t time.Time) error {
+	return nil
+}
+
+func (w *WindowsPipeConn) SetWriteDeadline(t time.Time) error {
+	return nil
 }
 
 // handshake performs the initial handshake with Discord.
